@@ -127,3 +127,11 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# CUSTOM
+.idea/
+.gitignore
+dataset/AknesDataFiles/DataSamples
+checkpoints
+wandb
+*.ipynb
