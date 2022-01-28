@@ -5,25 +5,25 @@ from preprocessing.preprocess import NORSARDataset
 from .types_ import *
 
 
-def build_data_pipeline(config_ssl: dict) -> Tuple[DataLoader, DataLoader]:
-    batch_size = config_ssl['dataset']['batch_size']
-    num_workers = config_ssl['dataset']['num_workers']
+def build_data_pipeline(config: dict) -> Tuple[DataLoader, DataLoader]:
+    batch_size = config['dataset']['batch_size']
+    num_workers = config['dataset']['num_workers']
 
     # build transforms
     augs = []
-    for aug_name in config_ssl['augmentations']:
+    for aug_name in config['augmentations']:
         augs.append(augmentations[aug_name]())
     transforms = Compose(augs)
 
     # build datasets
     train_dataset = NORSARDataset(transform=transforms,
-                                  return_single_spectrogram=config_ssl['dataset']['return_single_spectrogram_train'],
+                                  return_single_spectrogram=config['dataset']['return_single_spectrogram_train'],
                                   kind='train',
-                                  **config_ssl['dataset'])
+                                  **config['dataset'])
     test_dataset = NORSARDataset(transform=transforms,
-                                 return_single_spectrogram=config_ssl['dataset']['return_single_spectrogram_test'],
+                                 return_single_spectrogram=config['dataset']['return_single_spectrogram_test'],
                                  kind='test',
-                                 **config_ssl['dataset'])
+                                 **config['dataset'])
 
     # build data_loaders
     train_data_loader = DataLoader(train_dataset,

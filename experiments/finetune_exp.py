@@ -1,3 +1,4 @@
+import os
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
@@ -9,16 +10,14 @@ from sklearn.preprocessing import LabelEncoder
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-from backbones import backbones
-from sklearn.utils.class_weight import compute_class_weight
-import einops
 
+from utils import root_dir
 from utils.types_ import *
 
 
 class Classifier(nn.Module):
     def __init__(self,
-                 in_size: int = 512,
+                 in_size: int,
                  n_classes: int = 8):
         super().__init__()
         self.model = nn.Linear(in_size, n_classes)
@@ -49,106 +48,71 @@ class GiniImpurity(object):
         self.running_std = (1 - self.momentum) * self.running_std + self.momentum * torch.std(impurities)
 
 
+def compute_balanced_class_weight(label_encoder: LabelEncoder) -> Tensor:
+    """
+    Following (https://scikit-learn.org/stable/modules/generated/sklearn.utils.class_weight.compute_class_weight.html)
+    NB! Noise class is ignored.
+    """
+    workdir = root_dir.joinpath('dataset', 'AknesDataFiles', 'DataSamples')
+    dirnames = [item for item in os.listdir(workdir)
+                if os.path.isdir(workdir.joinpath(item)) and (item != 'Unlabeled')]
+
+    sample_count = {}
+    for dirname in dirnames:
+        if dirname == 'Noise':
+            continue
+        label_num_idx = label_encoder.transform([dirname])[0]
+        sample_count[label_num_idx] = len(os.listdir(workdir.joinpath(dirname)))
+    sample_count = dict(sorted(sample_count.items()))
+
+    n_classes = len(sample_count.keys())
+    sample_count_values = np.array(list(sample_count.values()))
+    n_samples = np.sum(sample_count_values)
+    class_weight = n_samples / (n_classes * sample_count_values)
+    class_weight = np.concatenate(([0.], class_weight))  # 0. for the Noise class
+    return torch.from_numpy(class_weight).float()
+
+
 class FinetuneExperiment(pl.LightningModule):
     def __init__(self,
-                 encoder,
-                 params: dict,
+                 encoder: nn.Module,
+                 config_ft: dict,
                  n_train_samples: int = None,
-                 batch_size: int = None,
-                 max_epochs: int = None,
                  label_encoder: LabelEncoder = None):
         super().__init__()
         self.encoder = encoder
-        # self.encoder = nn.Sequential(*(list(encoder.model.children())[:-2]))
-        self.encoder_ts = backbones['SCvTEncoder']()
-        # self.encoder_ts = backbones['DownsampleEncoder']()
-        self.params = params
+        self.config_ft = config_ft
+        self.params = config_ft['exp_params']
+        batch_size = config_ft['dataset']['batch_size']
+        max_epochs = config_ft['trainer_params']['max_epochs']
         self.T_max = max_epochs * np.ceil(n_train_samples / batch_size)  # Maximum number of iterations
         self.label_encoder = label_encoder
 
-        representation_size = 0
-        if self.params['use_encoder']:
-            representation_size += self.params['repr_size']['encoder']
-        if self.params['use_encoder_ts']:
-            representation_size += self.params['repr_size']['encoder_ts']
-
-        self.classifier = Classifier(in_size=representation_size)
-        class_weight = torch.Tensor([0., 0.89, 1.25, 1.2, 0.58, 1.19, 1.22, 1.19])  # following (https://scikit-learn.org/stable/modules/generated/sklearn.utils.class_weight.compute_class_weight.html)
-        self.criterion = nn.CrossEntropyLoss(weight=class_weight,
-                                             label_smoothing=self.params['label_smoothing'])
+        self.classifier = Classifier(in_size=self.params['out_size_enc'], n_classes=self.params['n_classes'])
+        class_weight = compute_balanced_class_weight(label_encoder) if self.params['use_class_weight'] else None
+        print('class_weight:', class_weight)
+        self.criterion = nn.CrossEntropyLoss(weight=class_weight, label_smoothing=self.params['label_smoothing'])
 
         self.gini = GiniImpurity()
 
-        # self.tfl = nn.TransformerEncoderLayer(512, nhead=4, dim_feedforward=512*3, activation='gelu', batch_first=True, norm_first=True)
-        self.cls_token = nn.Parameter(torch.randn(1, 1, 512))
+        if self.params['freeze_encoders']:
+            for p in self.encoder.parameters():
+                p.requires_grad = False
 
-        if (self.params['use_encoder'] is False) or self.params['freeze_encoders']:
-            if self.encoder is not None:
-                for p in self.encoder.parameters():
-                    p.requires_grad = False
-        if (self.params['use_encoder_ts'] is False) or self.params['freeze_encoders']:
-            if self.encoder_ts is not None:
-                for p in self.encoder_ts.parameters():
-                    p.requires_grad = False
-
-    def forward(self, Sxx: Tensor, st: Tensor) -> Tensor:
-        if self.params['use_encoder'] and self.params['use_encoder_ts']:
-            y = self.encoder(Sxx)
-            y_ts = self.encoder_ts(st.float())
-            return torch.cat((y, y_ts), dim=1)
-        elif self.params['use_encoder'] and not self.params['use_encoder_ts']:
-            return self.encoder(Sxx)
-            # out = self.encoder(Sxx)  # (B, C, H, W)
-            # out = out.flatten(start_dim=2)  # (B, C, HW)
-            # out = einops.rearrange(out, 'b c n -> b n c')  # (B, HW, C) == (B, N, C)
-            #
-            # cls_tokens = einops.repeat(self.cls_token, '() n d -> b n d', b=out.shape[0])
-            # out = torch.cat((cls_tokens, out), dim=1)  # (B, 1+N, C)
-            #
-            # out = self.tfl(out)  # (B, 1+N, C)
-            # y = out[:, 0]  # (B, C)
-            # return y
-
-        elif not self.params['use_encoder'] and self.params['use_encoder_ts']:
-            return self.encoder_ts(st.float())
-        else:
-            raise ValueError('You should use at least one encoder.')
+    def forward(self, Sxx: Tensor) -> Tensor:
+        return self.encoder(Sxx)
 
     def training_step(self, batch, batch_idx):
+        self.encoder.eval() if self.params['freeze_encoders'] or self.params['freeze_bn_stat_train'] else self.encoder.train()
         self.classifier.train()
-        if self.params['freeze_encoders'] or self.params['freeze_bn_stat_train']:
-            self.encoder.eval() if self.encoder else None
-            self.encoder_ts.eval() if self.encoder_ts else None
-        else:
-            self.encoder.train() if self.encoder else None
-            self.encoder_ts.train() if self.encoder_ts else None
 
-        (Sxx, _, _, st, _, _), label, aux_info = batch
-        # (Sxx, st), label, aux_info = batch
+        # Sxx, label = batch  # Sxx: (B, n_sensors, H, W)
+        Sxx, label = batch
+        Sxx = Sxx.float()
+        label = label.long()
 
-        # stack representations along the sensor-axis
-        n_sensors = Sxx.shape[1]
-        ys = None
-        for sensor_idx in range(n_sensors):
-            Sxx_view_single_sensor = Sxx[:, [sensor_idx], :, :]  # [B x 1 x H x W]
-            st_view_single_sensor = st[:, [sensor_idx], :]
-            y = self.forward(Sxx_view_single_sensor, st_view_single_sensor)
-            if ys is None:
-                ys = y.clone()
-            else:
-                ys = torch.cat((ys, y), dim=-1)
-
-        # concat aux info
-        # norm_stn_ratio = aux_info['norm_stn_ratio'].float().unsqueeze(-1)  # [B x 24(1) x 1]
-        # norm_min = aux_info['norm_min'].float().unsqueeze(-1)  # [B x 24(1) x 1]
-        # norm_max = aux_info['norm_max'].float().unsqueeze(-1)  # [B x 24(1) x 1]
-        # ys = torch.cat((ys, norm_stn_ratio, norm_min, norm_max), dim=-1)  # [B x 24(1) x D+3]
-
-        # classifier
-        # out = self.classifier(out)  # (B, 8)
-        out = self.classifier(ys.squeeze())  # (B, 8)
-
-        # loss
+        y = self.forward(Sxx)  # (B, D)
+        out = self.classifier(y)  # (B, 8)
         loss = self.criterion(out, label)
 
         # lr scheduler
@@ -159,42 +123,30 @@ class FinetuneExperiment(pl.LightningModule):
 
     @torch.no_grad()
     def validation_step(self, batch, batch_idx):
+        self.encoder.eval()
         self.classifier.eval()
-        self.encoder.eval() if self.encoder else None
-        self.encoder_ts.eval() if self.encoder_ts else None
 
-        (Sxx, st), label, aux_info = batch
-        label = label.cpu()
+        Sxx, label = batch  # Sxx: (B, n_sensors, H, W)
+        Sxx = Sxx.float()
+        label = label.long().cpu()
 
         # stack representations along the sensor-axis
         n_sensors = Sxx.shape[1]
         ys = None
         for sensor_idx in range(n_sensors):
-            Sxx_view_single_sensor = Sxx[:, [sensor_idx], :, :]  # [B x 1 x H x W]
-            st_view_single_sensor = st[:, [sensor_idx], :]
-            y = self.forward(Sxx_view_single_sensor, st_view_single_sensor).detach()
+            Sxx_single_sensor = Sxx[:, [sensor_idx], :, :]  # (B, H, W)
+            y = self.forward(Sxx_single_sensor).detach()  # (B, D)
 
             if ys is None:
                 ys = torch.zeros(y.shape[0], n_sensors, y.shape[-1]).float().to(Sxx.device)  # [B x 24 x D]
             ys[:, sensor_idx, :] = y
 
-            # if ys is None:
-            #     ys = y.clone()
-            # else:
-            #     ys = torch.cat((ys, y), dim=-1)
-
-        # concat aux info
-        # norm_stn_ratio = aux_info['norm_stn_ratio'].float().unsqueeze(-1)  # [B x 24(1) x 1]
-        # norm_min = aux_info['norm_min'].float().unsqueeze(-1)  # [B x 24(1) x 1]
-        # norm_max = aux_info['norm_max'].float().unsqueeze(-1)  # [B x 24(1) x 1]
-        # ys = torch.cat((ys, norm_stn_ratio, norm_min, norm_max), dim=-1)  # [B x 24(1) x D+3]
-
         # classifier
-        avg_prob_pred = torch.zeros(ys.shape[0], 8).float()  # (B, 8)
+        avg_prob_pred = torch.zeros(ys.shape[0], self.params['n_classes']).float()  # (B, 8)
         for sensor_idx in range(n_sensors):
-            out = self.classifier(ys[:, sensor_idx, :]).detach().cpu()  # (B, 8)
+            out = self.classifier(ys[:, sensor_idx, :]).detach()  # (B, 8)
             # out = nn.functional.softmax(out, dim=1)
-            out = nn.functional.log_softmax(out, dim=1)
+            out = nn.functional.log_softmax(out, dim=1).cpu()
 
             # impurities = self.gini.compute_gini(out)[:, None]  # (B, 1)
             # out = out * impurities
@@ -202,9 +154,6 @@ class FinetuneExperiment(pl.LightningModule):
 
             avg_prob_pred += out
         avg_prob_pred /= n_sensors
-
-        # avg_prob_pred = self.classifier(ys).detach().cpu()
-        # avg_prob_pred = nn.functional.softmax(avg_prob_pred, dim=-1)
 
         # gini
         # impurities = self.gini.compute_gini(avg_prob_pred)  # (B, )
@@ -222,26 +171,18 @@ class FinetuneExperiment(pl.LightningModule):
         pred_result = (label == pred_label)  # (B,)
 
         # loss
-        try:
-            loss = -torch.log(avg_prob_pred[range(len(label)), label]).mean()
-        except IndexError:
-            loss = torch.tensor([0.])
+        avg_prob_pred = np.exp(avg_prob_pred)  # to make it be like an output after `softmax(out)` instead of `log_softmax(out)`
+        loss = -torch.log(avg_prob_pred[range(len(label)), label]).mean()
 
-        # return {'loss': loss, 'pred_result': pred_result}
-        return {'pred_result': pred_result.cpu(),
-                'label': label.cpu(),
-                'pred_label': pred_label.cpu(),
+        return {'pred_result': pred_result,
+                'label': label,
+                'pred_label': pred_label,
                 'loss': loss}
 
     def configure_optimizers(self):
-        opt_params = [{'params': self.classifier.parameters(), 'lr': self.params['LR_clf']}, ]
-        if self.params['use_encoder']:
-            opt_params.append({'params': self.encoder.parameters(), 'lr': self.params['LR_enc']['encoder']})
-            # opt_params.append({'params': self.tfl.parameters(), 'lr': self.params['LR_clf']})
-            opt_params.append({'params': [self.cls_token], 'lr': self.params['LR_clf']})
-        if self.params['use_encoder_ts']:
-            opt_params.append({'params': self.encoder_ts.parameters(), 'lr': self.params['LR_enc']['encoder_ts']})
-        opt = torch.optim.Adam(opt_params, weight_decay=self.params['weight_decay'])
+        opt = torch.optim.Adam([{'params': self.encoder.parameters(), 'lr': self.params['LR']['encoder']},
+                                {'params': self.classifier.parameters(), 'lr': self.params['LR']['clf']}],
+                               weight_decay=self.params['weight_decay'])
         return {"optimizer": opt, "lr_scheduler": CosineAnnealingLR(opt, self.T_max)}
 
     def training_epoch_end(self, outs) -> None:
@@ -292,5 +233,6 @@ class FinetuneExperiment(pl.LightningModule):
             plt.tight_layout()
             wandb.log({'val_confusion_mat': wandb.Image(plt)})
             plt.close()
-        except:
+        except ValueError:
+            # this can happen during fine-tuning with a small dataset
             pass

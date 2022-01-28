@@ -169,15 +169,25 @@ class NORSARDataset(Dataset):
         # augmentation
         if self.return_single_spectrogram:
             Sxx_view1, Sxx_view2 = Sxx[[0], :, :], Sxx[[1], :, :]  # (H, W)
-            try:
+            first_transform = str(self.transform.transforms[0])
+            if first_transform in ['NeighboringCrop', 'RandomCrop']:
                 crop_window_size_rate = self.transform.transforms[0].crop_window_size_rate
-                shift_rate = self.transform.transforms[0].shift_rate
-                norm_ts, norm_ts_l, norm_ts_k = sample_norm_timesteps_nc(crop_window_size_rate, shift_rate)
-                norm_ts_nc = {'ts': norm_ts, 'ts_l': norm_ts_l, 'ts_k': norm_ts_k}
-            except AttributeError:
+                if first_transform == 'NeighboringCrop':
+                    shift_rate = self.transform.transforms[0].shift_rate
+                    norm_ts, norm_ts_l, norm_ts_k = sample_norm_timesteps_nc(crop_window_size_rate, shift_rate)
+                    norm_ts_nc = {'ts': norm_ts, 'ts_l': norm_ts_l, 'ts_k': norm_ts_k}
+                elif first_transform == 'RandomCrop':
+                    norm_ts_nc = {'ts': 0, 'ts_l': 0, 'ts_k': 0}
+                else:
+                    raise ValueError
+                Sxx_view1, Sxx_view_l, Sxx_view_k = self.transform([Sxx_view1, Sxx_view2, norm_ts_nc])
+                return (Sxx_view1, Sxx_view_l, Sxx_view_k), label  # Sxx: (1, H, W)
+            elif first_transform == 'ToTensor':
                 norm_ts_nc = {'ts': 0, 'ts_l': 0, 'ts_k': 0}
-            Sxx_view1, Sxx_view_l, Sxx_view_k = self.transform([Sxx_view1, Sxx_view2, norm_ts_nc])
-            return (Sxx_view1, Sxx_view_l, Sxx_view_k), label  # Sxx: (1, H, W)
+                Sxx_view1, Sxx_view_l, norm_ts_nc = self.transform([Sxx_view1, Sxx_view2, norm_ts_nc])
+                return Sxx_view1, label
+            else:
+                raise ValueError
         else:
             return Sxx, label  # Sxx: (24, H, W)
 
@@ -194,10 +204,10 @@ if __name__ == '__main__':
     os.chdir(root_dir)
 
     # transforms = Compose([NeighboringCrop(), ToTensor()])
-    transforms = Compose([RandomCrop(), ToTensor()])
-    # transforms = Compose([ToTensor()])
+    # transforms = Compose([RandomCrop(), ToTensor()])
+    transforms = Compose([ToTensor()])
     data_loader = DataLoader(NORSARDataset(transform=transforms,
-                                           return_single_spectrogram=True,  # True / False
+                                           return_single_spectrogram=False,  # True / False
                                            is_ssl=False,
                                            kind='train'),
                              batch_size=2,

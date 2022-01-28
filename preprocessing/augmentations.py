@@ -86,6 +86,9 @@ class NeighboringCrop(object):
 
         return [Sxx_view, Sxx_view_l, Sxx_view_k]
 
+    def __repr__(self):
+        return 'NeighboringCrop'
+
 
 class RandomCrop(object):
     def __init__(self,
@@ -127,6 +130,9 @@ class RandomCrop(object):
 
         return [Sxx_view1, Sxx_view2, Sxx_view_k]
 
+    def __repr__(self):
+        return 'RandomCrop'
+
 
 class ToTensor(object):
     def __call__(self, input: Tensor):
@@ -134,6 +140,9 @@ class ToTensor(object):
             if isinstance(input[i], np.ndarray):
                 input[i] = torch.from_numpy(input[i]).float()
         return input
+
+    def __repr__(self):
+        return 'ToTensor'
 
 
 # index dictionary (must be defined)
