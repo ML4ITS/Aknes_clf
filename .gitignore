@@ -135,3 +135,4 @@ dataset/AknesDataFiles/DataSamples
 checkpoints
 wandb
 *.ipynb
+collect_results.py

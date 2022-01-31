@@ -15,7 +15,7 @@ exp_params:
   weight_decay: 0. #0.00001
   model_save_ep_period: 50
   knn_acc_record_ep_period: 1
-  gradient_clip_val: 0.5
+  gradient_clip_val: 0. #5
 
 trainer_params:
   gpus:
