@@ -95,9 +95,8 @@ class FinetuneExperiment(pl.LightningModule):
 
         self.gini = GiniImpurity()
 
-        if self.params['freeze_encoders']:
-            for p in self.encoder.parameters():
-                p.requires_grad = False
+        for p in self.encoder.parameters():
+            p.requires_grad = False if self.params['freeze_encoders'] else True
 
     def forward(self, Sxx: Tensor) -> Tensor:
         return self.encoder(Sxx)

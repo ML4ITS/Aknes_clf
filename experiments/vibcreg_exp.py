@@ -58,7 +58,9 @@ class VIbCRegTNCExperiment(pl.LightningModule):
         loss_hist['loss'] = vibcreg_loss
 
         # loss: TNC
-        tnc_loss = self.D_tnc.loss_function(y, y_l, y_k, loss_hist)
+        tnc_loss = self.D_tnc.loss_function(y, y_l, y_k,
+                                            self.params['use_diag_loss'],
+                                            loss_hist)
         loss_hist['loss'] += self.params['rho'] * tnc_loss
 
         # get some data for tracking training status
@@ -73,6 +75,13 @@ class VIbCRegTNCExperiment(pl.LightningModule):
         # lr scheduler
         sch = self.lr_schedulers()
         sch.step()
+
+        for k in loss_hist.keys():
+            if k != 'loss':
+                try:
+                    loss_hist[k] = loss_hist[k].detach()
+                except AttributeError:
+                    pass
 
         return loss_hist
 
@@ -94,8 +103,17 @@ class VIbCRegTNCExperiment(pl.LightningModule):
         loss_hist['loss'] = vibcreg_loss
 
         # loss: TNC
-        tnc_loss = self.D_tnc.loss_function(y, y_l, y_k, loss_hist)
+        tnc_loss = self.D_tnc.loss_function(y, y_l, y_k,
+                                            self.params['use_diag_loss'],
+                                            loss_hist)
         loss_hist['loss'] += self.params['rho'] * tnc_loss
+
+        for k in loss_hist.keys():
+            if k != 'loss':
+                try:
+                    loss_hist[k] = loss_hist[k].detach()
+                except AttributeError:
+                    pass
 
         return loss_hist
 

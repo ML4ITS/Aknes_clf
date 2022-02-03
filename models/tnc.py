@@ -34,7 +34,12 @@ class Discriminator(nn.Module):
         out = self.model(x_all)
         return out
 
-    def loss_function(self, y: Tensor, y_l: Tensor, y_k: Tensor, loss_hist: dict) -> Tensor:
+    def loss_function(self,
+                      y: Tensor,
+                      y_l: Tensor,
+                      y_k: Tensor,
+                      use_diag_loss: bool,
+                      loss_hist: dict) -> Tensor:
         """
         :param y: reference repr
         :param y_l: neighboring repr
@@ -66,7 +71,8 @@ class Discriminator(nn.Module):
         diag_neg = torch.diag(corr_neg, 0)  # (B,)
         diag_pos_loss = torch.mean((1. - diag_pos)**2)
         diag_neg_loss = torch.mean((0. - diag_neg)**2)
-        loss += (diag_pos_loss + diag_neg_loss) / 2
+        if use_diag_loss:
+            loss += (diag_pos_loss + diag_neg_loss) / 2
 
         # log
         loss_hist['TNC/tnc_loss'] = loss
