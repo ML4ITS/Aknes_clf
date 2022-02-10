@@ -1,8 +1,8 @@
+import os
 import logging
 import warnings
 
 import torch
-from torchvision.transforms import Compose
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import pandas as pd
@@ -70,6 +70,7 @@ class AknesOriginal(Dataset):
         data_dir_fname = root_dir.joinpath('dataset', 'data_dir.csv')
         self.data_dir_csv = pd.read_csv(data_dir_fname)  # (n_samples, 2)
         self.data_dir_csv = self.data_dir_csv[self.data_dir_csv['event'] != 'Unlabeled']  # remove unlabeled class samples
+        self.data_dir_csv['fname'] = self.data_dir_csv['fname'].apply(lambda s: s.replace('\\', os.sep))
 
         # fit-transform label encoder
         self.label_encoder = LabelEncoder()
@@ -150,6 +151,8 @@ class AknesOriginal(Dataset):
         Sxx = torch.from_numpy(Sxx).float()
         label = torch.tensor(label).long()
 
+        torch.cuda.empty_cache()
+
         return Sxx, label
 
     def __len__(self):
@@ -180,8 +183,6 @@ def build_datapipeline(config: dict):
 
 
 if __name__ == '__main__':
-    import os
-    from torch.utils.data import DataLoader
     import matplotlib.pyplot as plt
     os.chdir(root_dir)
 
