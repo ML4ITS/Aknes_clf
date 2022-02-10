@@ -21,6 +21,9 @@ class AlexNet(nn.Module):
 if __name__ == '__main__':
     import torch
 
+    def count_parameters(model):
+        return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
     # toy dataset
     B = 32
     C = 1
@@ -30,6 +33,7 @@ if __name__ == '__main__':
     # modify model
     encoder = AlexNet()
     print(encoder, '\n')
+    print(count_parameters(encoder))
 
     # forward
     out = encoder(X)
