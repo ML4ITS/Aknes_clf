@@ -1,4 +1,6 @@
 import os
+import tempfile
+from pathlib import Path
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
@@ -21,8 +23,6 @@ class Classifier(nn.Module):
                  n_classes: int = 8):
         super().__init__()
         self.model = nn.Linear(in_size, n_classes)
-        # self.model = nn.Sequential(nn.Dropout(0.5),
-        #                            nn.Linear(in_size, n_classes))
 
     def forward(self, input: Tensor) -> Tensor:
         return self.model(input)
@@ -125,7 +125,7 @@ class FinetuneExperiment(pl.LightningModule):
         self.encoder.eval()
         self.classifier.eval()
 
-        Sxx, label = batch  # Sxx: (B, n_sensors, H, W)
+        Sxx, label = batch  # Sxx: (B, n_sensors(24), H, W)
         Sxx = Sxx.float()
         label = label.long().cpu()
 
@@ -184,6 +184,35 @@ class FinetuneExperiment(pl.LightningModule):
                                weight_decay=self.params['weight_decay'])
         return {"optimizer": opt, "lr_scheduler": CosineAnnealingLR(opt, self.T_max)}
 
+    def _save_model(self, current_epoch: int, save_dirpath: str = 'checkpoints'):
+        if self.config_ft['exp_params']['model_save_ep_period'] < 1:
+            return None
+
+        fname = 'finetune'
+        temp_dirpath = Path(tempfile.mkdtemp()).parent.joinpath('checkpoints')
+        if not os.path.isdir(temp_dirpath):
+            os.mkdir(temp_dirpath)
+
+        current_epoch = current_epoch + 1  # make `epoch` starts from 1 instead of 0
+        if current_epoch % self.config_ft['exp_params']['model_save_ep_period'] == 0:
+            if not os.path.isdir(root_dir.joinpath('checkpoints')):
+                os.mkdir(root_dir.joinpath('checkpoints'))
+
+            try:
+                torch.save({
+                    'epoch': current_epoch,
+                    'encoder_state_dict': self.encoder.state_dict(),
+                    'classifier_state_dict': self.classifier.state_dict(),
+                }, root_dir.joinpath(save_dirpath, f'{fname}-ep_{current_epoch}.ckpt'))
+                print(f'# model is saved in {save_dirpath}.')
+            except PermissionError:
+                torch.save({
+                    'epoch': current_epoch,
+                    'encoder_state_dict': self.encoder.state_dict(),
+                    'classifier_state_dict': self.classifier.state_dict(),
+                }, root_dir.joinpath(temp_dirpath, f'{fname}-ep_{current_epoch}.ckpt'))
+                print(f'# model is saved in {temp_dirpath}.')
+
     def training_epoch_end(self, outs) -> None:
         mean_outs = {'loss': 0.}
         for out in outs:
@@ -196,6 +225,8 @@ class FinetuneExperiment(pl.LightningModule):
                      'train/loss': mean_outs['loss']}
         for k, v in log_items.items():
             self.log(k, v)
+
+        self._save_model(self.current_epoch)
 
     def validation_epoch_end(self, outs) -> None:
         pred_results = np.array([])
