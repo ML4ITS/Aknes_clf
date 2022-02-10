@@ -1,4 +1,12 @@
+"""
+run by 'python train.py'
+"""
+import os
+import sys
 from argparse import ArgumentParser
+from pathlib import Path
+import tempfile
+
 import pytorch_lightning as pl
 import numpy as np
 import wandb
@@ -11,14 +19,20 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
+# change dir to the root dir
+root_dir_ = Path(os.path.dirname(os.path.abspath(__file__))).parent
+os.chdir(root_dir_)
+sys.path.append(str(root_dir_))
+
 from experiments.finetune_exp import compute_balanced_class_weight
 from utils.types_ import *
+from utils import root_dir
 
 
 def load_args():
     parser = ArgumentParser()
     parser.add_argument('--configs', type=str, help="Path to the dataset config.",
-                        default='config.yaml')
+                        default=os.path.join('original_implementation', 'config.yaml'))
     return parser.parse_args()
 
 
@@ -38,7 +52,6 @@ class Experiment(pl.LightningModule):
         self.label_encoder = label_encoder
 
         class_weight = compute_balanced_class_weight(label_encoder) if self.config['exp_params']['use_class_weight'] else None
-        print('# class_weight:', class_weight)
         self.criterion = nn.CrossEntropyLoss(weight=class_weight)
 
     def forward(self, input: Tensor) -> Tensor:
@@ -47,7 +60,7 @@ class Experiment(pl.LightningModule):
     def training_step(self, batch, batch_idx) -> dict:
         self.model.train()
 
-        Sxx, label = batch  # Sxx: [B x 1 x H x W]
+        Sxx, label = batch  # Sxx: [B x 24 x H x W]
 
         # propagate
         out = self.forward(Sxx)  # [B x 8]
@@ -64,7 +77,7 @@ class Experiment(pl.LightningModule):
     def validation_step(self, batch, batch_idx) -> dict:
         self.model.eval()
 
-        Sxx, label = batch  # Sxx: [B x 1 x H x W]
+        Sxx, label = batch  # Sxx: [B x 24 x H x W]
 
         # propagate
         out = self.forward(Sxx)  # [B x 8]
@@ -87,6 +100,33 @@ class Experiment(pl.LightningModule):
                                 ], weight_decay=self.config['exp_params']['weight_decay'])
         return {"optimizer": opt, "lr_scheduler": CosineAnnealingLR(opt, self.T_max)}
 
+    def _save_model(self, current_epoch: int, save_dirpath: str = 'checkpoints'):
+        if self.config['exp_params']['model_save_ep_period'] < 1:
+            return None
+
+        fname = 'original_imp'
+        temp_dirpath = Path(tempfile.mkdtemp()).parent.joinpath('checkpoints')
+        if not os.path.isdir(temp_dirpath):
+            os.mkdir(temp_dirpath)
+
+        current_epoch = current_epoch + 1  # make `epoch` starts from 1 instead of 0
+        if current_epoch % self.config['exp_params']['model_save_ep_period'] == 0:
+            if not os.path.isdir(root_dir.joinpath('checkpoints')):
+                os.mkdir(root_dir.joinpath('checkpoints'))
+
+            try:
+                torch.save({
+                    'epoch': current_epoch,
+                    'model_state_dict': self.model.state_dict(),
+                }, root_dir.joinpath(save_dirpath, f'{fname}-ep_{current_epoch}.ckpt'))
+                print(f'# model is saved in {save_dirpath}.')
+            except PermissionError:
+                torch.save({
+                    'epoch': current_epoch,
+                    'model_state_dict': self.model.state_dict(),
+                }, root_dir.joinpath(temp_dirpath, f'{fname}-ep_{current_epoch}.ckpt'))
+                print(f'# model is saved in {temp_dirpath}.')
+
     def training_epoch_end(self, outs) -> None:
         mean_outs = {k: 0. for k in outs[0].keys()}
         for k in mean_outs.keys():
@@ -98,6 +138,8 @@ class Experiment(pl.LightningModule):
         log_items = {'epoch': self.current_epoch,
                      'train/loss': mean_outs['loss']}
         wandb.log(log_items)
+
+        self._save_model(self.current_epoch)
 
     def validation_epoch_end(self, outs) -> None:
         mean_outs = {'loss': 0.}
@@ -121,20 +163,23 @@ class Experiment(pl.LightningModule):
         wandb.log(log_items)
 
         # log confusion matrix
-        cmat = confusion_matrix(labels, pred_labels)
-        class_names = list(self.label_encoder.classes_)
-        df_cmat = pd.DataFrame(cmat, index=class_names, columns=class_names).astype(int)
-        heatmap = sns.heatmap(df_cmat, annot=True, fmt='d')
-        heatmap.yaxis.set_ticklabels(heatmap.yaxis.get_ticklabels(), rotation=0, ha='right', fontsize=15)
-        heatmap.xaxis.set_ticklabels(heatmap.xaxis.get_ticklabels(), rotation=45, ha='right', fontsize=15)
-        plt.ylabel('True label')
-        plt.xlabel('Predicted label')
-        plt.title(f'epoch: {self.current_epoch+1}')
-        plt.tight_layout()
-        log_items = {'epoch': self.current_epoch,
-                     'val_confusion_mat': wandb.Image(plt)}
-        wandb.log(log_items)
-        plt.close()
+        try:
+            cmat = confusion_matrix(labels, pred_labels)
+            class_names = list(self.label_encoder.classes_)
+            df_cmat = pd.DataFrame(cmat, index=class_names, columns=class_names).astype(int)
+            heatmap = sns.heatmap(df_cmat, annot=True, fmt='d')
+            heatmap.yaxis.set_ticklabels(heatmap.yaxis.get_ticklabels(), rotation=0, ha='right', fontsize=15)
+            heatmap.xaxis.set_ticklabels(heatmap.xaxis.get_ticklabels(), rotation=45, ha='right', fontsize=15)
+            plt.ylabel('True label')
+            plt.xlabel('Predicted label')
+            plt.title(f'epoch: {self.current_epoch+1}')
+            plt.tight_layout()
+            log_items = {'epoch': self.current_epoch,
+                         'val_confusion_mat': wandb.Image(plt)}
+            wandb.log(log_items)
+            plt.close()
+        except ValueError:
+            print('not enough classes in the mini-batch.')
 
 
 if __name__ == '__main__':
@@ -142,7 +187,7 @@ if __name__ == '__main__':
     from pytorch_lightning.callbacks import LearningRateMonitor
 
     from utils.load_yaml import load_yaml_param_settings
-    from preprocess import build_datapipeline
+    from original_implementation.preprocess import build_datapipeline
     from backbones import backbones_with_clf
 
     # load configs
@@ -166,6 +211,6 @@ if __name__ == '__main__':
     trainer = pl.Trainer(**configs['trainer_params'],
                          logger=wandb_logger,
                          checkpoint_callback=False,
-                         callbacks=[LearningRateMonitor(logging_interval='epoch')])
+                         callbacks=[LearningRateMonitor(logging_interval='epoch')],)
     trainer.fit(experiment, train_dataloaders=train_data_loader, val_dataloaders=test_data_loader)
     wandb.finish()
