@@ -120,6 +120,9 @@ class ResNet34(nn.Module):
 
 
 if __name__ == '__main__':
+    def count_parameters(model):
+        return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
     # toy dataset
     B = 32
     C = 1
@@ -129,6 +132,7 @@ if __name__ == '__main__':
     # modify model
     encoder = ResNet34Encoder()
     print(encoder)
+    print(count_parameters(encoder))
 
     # forward
     out = encoder(X)
