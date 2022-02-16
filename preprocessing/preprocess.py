@@ -210,7 +210,7 @@ if __name__ == '__main__':
                                            return_single_spectrogram=False,  # True / False
                                            is_ssl=False,
                                            kind='train'),
-                             batch_size=2,
+                             batch_size=64,
                              shuffle=False,
                              drop_last=True,
                              num_workers=0)
