@@ -39,7 +39,7 @@ if __name__ == '__main__':
                                                                  n_train_samples=train_data_loader.dataset.__len__(),
                                                                  label_encoder=train_data_loader.dataset.label_encoder)
     wandb_logger = WandbLogger(project='aknes-SSL',
-                               name=f'{config_ssl["model_params"]["name"]}',
+                               name=None,
                                config=config_ssl)
     trainer = pl.Trainer(**config_ssl['trainer_params'],
                          logger=wandb_logger,

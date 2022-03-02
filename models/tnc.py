@@ -44,7 +44,7 @@ class Discriminator(nn.Module):
         :param y: reference repr
         :param y_l: neighboring repr
         :param y_k: non-neighboring repr
-        :return:
+        :param use_diag_loss: use of `c_p, c_n` in `L_tnc`
         """
         d_p = self.forward(y, y_l)
         d_n = self.forward(y, y_k)
@@ -56,7 +56,6 @@ class Discriminator(nn.Module):
         n_loss = self.criterion(d_n, non_neighbors)
         n_loss_u = self.criterion(d_n, neighbors)
         loss = p_loss + (1 - self.w) * n_loss + self.w * n_loss_u  # original TNC loss
-        loss = loss / 2
 
         p_acc = torch.sum(nn.Sigmoid()(d_p) > 0.5).item() / d_p.shape[0]
         n_acc = torch.sum(nn.Sigmoid()(d_n) < 0.5).item() / d_n.shape[0]
@@ -72,7 +71,7 @@ class Discriminator(nn.Module):
         diag_pos_loss = torch.mean((1. - diag_pos)**2)
         diag_neg_loss = torch.mean((0. - diag_neg)**2)
         if use_diag_loss:
-            loss += (diag_pos_loss + diag_neg_loss) / 2
+            loss += (diag_pos_loss + diag_neg_loss)
 
         # log
         loss_hist['TNC/tnc_loss'] = loss

@@ -5,7 +5,7 @@ from utils.get_root_dir import root_dir
 
 
 def download_dataset():
-    url = "https://drive.google.com/u/0/uc?id=1d2pV-ociZRBOkk-FsRMgHOhR_yHeQTJl&export=download"
+    url = "https://drive.google.com/u/0/uc?id=1UZ_wAc1Wvv6NfyaxgV5vaps9KT1rvZz3&export=download"
     output = root_dir.joinpath('dataset', 'AknesDataFiles', 'aknes_DataSamples.zip')
     gdown.download(url, str(output))
 
