@@ -3,7 +3,7 @@ dataset:
   test_data_ratio: 0.2
   train_test_split_rand_seed: 0
   batch_size: 64
-  num_workers: 12
+  num_workers: 0  # recommend to set to your #cpus
 
 backbone_with_clf_type: 'ResNet34'  # AlexNet; ResNet18; ResNet34
 
