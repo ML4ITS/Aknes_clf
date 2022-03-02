@@ -65,6 +65,5 @@ Parameters that are described above are not specified.
 
 
 # References
-[1] (Langet et al., 2022, "Automated classification of seismic signals recorded on the Åknes rockslope, Western Norway, using a Convolutional Neural Network") <br> 
-[2] (Lee et al., 2022, "Ensemble and self-supervised learning for improved
-classification of seismic signals from the  ̊Aknes rockslope") <br>
+[1] Langet et al., 2022, "Automated classification of seismic signals recorded on the Åknes rockslope, Western Norway, using a Convolutional Neural Network" <br> 
+[2] Lee et al., 2022, "Ensemble and self-supervised learning for improved classification of seismic signals from the  ̊Aknes rockslope"  <br>
