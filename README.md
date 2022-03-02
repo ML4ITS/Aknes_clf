@@ -25,7 +25,7 @@ Note:
 # Configuration Files
 Basic annotations are already available in the configuration files. Here, details of some parameters that might not be clear are explained. 
 
-### ssl.yaml
+### :wrench: ssl.yaml
 - `model_params`
   - `in_channels`: input channel size
   - `out_size_enc`: output channel size from an encoder
@@ -47,7 +47,7 @@ Basic annotations are already available in the configuration files. Here, detail
   - `return_single_spectrogram_train`: use of the ensemble prediction during testing
 
 
-### finetune.yaml
+### :wrench: finetune.yaml
 
 Parameters that are described above are not specified.
 
@@ -62,7 +62,7 @@ Parameters that are described above are not specified.
   - `train_data_ratio`: can be adjusted to 0.05 or 0.1 for the fine-tuning evaluation in a small-dataset regime.
   
 
-### original_implementation/config.yaml
+### :wrench: original_implementation/config.yaml
 
 - `backbone_with_clf_type`: available backbone types are: `AlexNet`, `ResNet18`, and `ResNet34`
 
