@@ -10,9 +10,6 @@ The paper is implemented in PyTorch in this repository.
 * `python finetune.py --config_ft configs/finetune.yaml`
 
 :rocket: Run the implementation of the relevant previous study [1] as described in our paper [2].  <br>
-[1] (Langet et al., 2022, "Automated classification of seismic signals recorded on the Åknes rockslope, Western Norway, using a Convolutional Neural Network") <br> 
-[2] (Lee et al., 2022, "Ensemble and self-supervised learning for improved
-classification of seismic signals from the  ̊Aknes rockslope") <br>
 * `python original_implementation/train.py --configs original_implementation/config.yaml` <br>
 
 Note:
@@ -67,3 +64,7 @@ Parameters that are described above are not specified.
 - `backbone_with_clf_type`: available backbone types are: `AlexNet`, `ResNet18`, and `ResNet34`
 
 
+# References
+[1] (Langet et al., 2022, "Automated classification of seismic signals recorded on the Åknes rockslope, Western Norway, using a Convolutional Neural Network") <br> 
+[2] (Lee et al., 2022, "Ensemble and self-supervised learning for improved
+classification of seismic signals from the  ̊Aknes rockslope") <br>
