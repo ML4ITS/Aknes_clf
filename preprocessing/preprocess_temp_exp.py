@@ -13,6 +13,7 @@ from sklearn.model_selection import train_test_split
 import cv2
 
 from utils import root_dir
+from original_implementation.preprocess import signaltonoise
 
 
 def sample_norm_timesteps_nc(crop_window_size_rate: float, shift_rate: float):
@@ -140,6 +141,8 @@ class NORSARDataset(Dataset):
                 st_[i, :] = tr.data  # (16000,)
             st = st_
 
+        snr = signaltonoise(st, axis=-1)
+
         # convert .dat into a spectrogram
         f, t, Sxx = spectrogram(st, fs=self.sampling_freq, nperseg=self.nperseg)  # Sxx: spectrogram; (n_sensors, H, W)
         Sxx = np.abs(Sxx)
@@ -181,16 +184,16 @@ class NORSARDataset(Dataset):
                 else:
                     raise ValueError
                 Sxx_view1, Sxx_view_l, Sxx_view_k = self.transform([Sxx_view1, Sxx_view2, norm_ts_nc])
-                return (Sxx_view1, Sxx_view_l, Sxx_view_k), label  # Sxx: (1, H, W)
+                return (Sxx_view1, Sxx_view_l, Sxx_view_k), label, snr  # Sxx: (1, H, W)
             # elif first_transform == 'ToTensor':
             else:
                 norm_ts_nc = {'ts': 0, 'ts_l': 0, 'ts_k': 0}
                 Sxx_view1, Sxx_view_l, norm_ts_nc = self.transform([Sxx_view1, Sxx_view2, norm_ts_nc])
-                return Sxx_view1, label
+                return Sxx_view1, label, snr
             # else:
             #     raise ValueError
         else:
-            return Sxx, label  # Sxx: (24, H, W)
+            return Sxx, label, snr  # Sxx: (24, H, W)
 
     def __len__(self):
         return self._len
@@ -219,13 +222,14 @@ if __name__ == '__main__':
     batch_idx = 0
 
     if data_loader.dataset.return_single_spectrogram:
-        for (Sxx_view, Sxx_view_l, Sxx_view_k), label in data_loader:
+        for (Sxx_view, Sxx_view_l, Sxx_view_k), label, snr in data_loader:
             break
 
         print('Sxx_view.shape:', Sxx_view.shape)
         print('Sxx_view_l.shape:', Sxx_view_l.shape)
         print('Sxx_view_k.shape:', Sxx_view_k.shape)
         print('label.shape:', label.shape)
+        print('snr:', snr)
 
         # visualize
         channels = Sxx_view.shape[1]
@@ -245,10 +249,11 @@ if __name__ == '__main__':
             plt.show()
 
     else:
-        for Sxx_view, label in data_loader:
+        for Sxx_view, label, snr in data_loader:
             break
 
         print('Sxx_view.shape:', Sxx_view.shape)
+        print('snr.shape:', snr.shape)
 
         sensor_idx = 0
         n_imfs = Sxx_view.shape[2]

@@ -5,13 +5,13 @@ dataset:
   batch_size: 64
   num_workers: 0  # recommend to set to your #cpus
 
-backbone_with_clf_type: 'ResNet34'  # AlexNet; ResNet18; ResNet34
+backbone_with_clf_type: 'ResNet18'  # AlexNet; ResNet18; ResNet34
 
 exp_params:
   LR: 0.001
   weight_decay: 0.0001
   use_class_weight: True
-  model_save_ep_period: -1  # -1 denotes no-save
+  model_save_ep_period: 50  # -1 denotes no-save
 
 trainer_params:
   gpus:

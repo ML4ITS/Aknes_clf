@@ -134,6 +134,22 @@ class RandomCrop(object):
         return 'RandomCrop'
 
 
+class RandomAmplitudeJitter(object):
+    def __init__(self):
+        self.min = 0.7
+        self.max = 1.3
+
+    def __call__(self, input: Tensor):
+        for i in range(len(input)):
+            if isinstance(input[i], np.ndarray):
+                r = np.random.uniform(self.min, self.max)
+                input[i] = input[i] * r
+        return input
+
+    def __repr__(self):
+        return 'RandomAmplitudeJitter'
+
+
 class ToTensor(object):
     def __call__(self, input: Tensor):
         for i in range(len(input)):
@@ -148,5 +164,6 @@ class ToTensor(object):
 # index dictionary (must be defined)
 augmentations = {'NeighboringCrop': NeighboringCrop,
                  'RandomCrop': RandomCrop,
+                 'RandomAmplitudeJitter': RandomAmplitudeJitter,
                  'ToTensor': ToTensor,
                  }

@@ -1,6 +1,7 @@
 load_encoder:
-  ckpt_fname: 'none'  # 'checkpoints/some_saved_model.ckpt'
-  backbone_type: 'ResNet34Encoder'
+  ckpt_fname: 'none'  # 'none' for training from scratch.
+#  ckpt_fname: 'checkpoints/encoder.ckpt'  # 'checkpoints/some_saved_model.ckpt'
+  backbone_type: 'ResNet18Encoder'
 
 exp_params:
   LR:
@@ -8,13 +9,13 @@ exp_params:
     clf: 0.001
   out_size_enc: 512
   freeze_encoders: False       # if `True` -> Linear Evaluation
-  freeze_bn_stat_train: False  # True if `train_data_ratio` is small else False
+  freeze_bn_stat_train: False  # True if `train_data_ratio` is small (5, 10%) else False
   weight_decay: 0.
   label_smoothing: 0.
   gradient_clip_val: 0.
   n_classes: 8
   use_class_weight: True
-  model_save_ep_period: -1     # -1 denotes no-save
+  model_save_ep_period: 50     # -1 denotes no-save
 
 trainer_params:
   gpus:
@@ -32,4 +33,5 @@ dataset:
   is_ssl: False
 
 augmentations:
+#  - 'RandomAmplitudeJitter'
   - 'ToTensor'

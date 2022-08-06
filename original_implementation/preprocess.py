@@ -153,6 +153,7 @@ class AknesOriginal(Dataset):
 
         torch.cuda.empty_cache()
 
+        # return st, Sxx, label
         return Sxx, label
 
     def __len__(self):
@@ -188,23 +189,35 @@ if __name__ == '__main__':
 
     # DataLoader
     data_loader = DataLoader(AknesOriginal(),
-                             batch_size=4,
+                             batch_size=32,
                              shuffle=True,
                              drop_last=True,
                              num_workers=0)
+    label_encoder = data_loader.dataset.label_encoder
 
     # fetch a mini-batch
-    for Sxx, label in data_loader:
+    for st, Sxx, label in data_loader:
         break
+    label_str = label_encoder.inverse_transform(label)
 
     print('Sxx.shape:', Sxx.shape)
     print('label.shape:', label.shape)
+    print('label.shape:', label.shape)
 
     # visualize
+    target_class = 'Regional' #'Slope_Multi' #'Rockfall'
     senosr_idx = 0
-    for idx in range(0, 4):
-        fig, ax1 = plt.subplots(1, 1, )
-        im1 = ax1.imshow(Sxx[idx, senosr_idx, :, :], aspect='auto')
-        ax1.invert_yaxis()
-        fig.colorbar(im1, orientation="horizontal")
+    for idx in range(Sxx.shape[0]):
+        if label_str[idx] == target_class:
+            fig, axes = plt.subplots(2, 1, figsize=(8, 3))
+
+            ax1 = axes[0]
+            im1 = ax1.imshow(Sxx[idx, senosr_idx, :, :], aspect='auto')
+            ax1.invert_yaxis()
+            fig.colorbar(im1, orientation="horizontal")
+            ax1.set_title(f'label_str: {label_str[idx]}')
+
+            ax2 = axes[1]
+            ax2.plot(st[idx, 0, :])
+            plt.tight_layout()
     plt.show()
