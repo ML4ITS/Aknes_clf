@@ -17,6 +17,7 @@ Note:
 * `configs/finetune.yaml` is set to run training a model (ResNet34) from scratch on 80% of the dataset.
 * `original_implementation/config.yaml` is set to run training a model (ResNet34) from scratch on 80% of the dataset following the implementation of the relevant previous study [1].
 * All configuration files can be edited to suit your experimental purpose.
+* The dataset is automatically downloaded once you run any of the above codes. The downloading code is defined in `utils/dataset.py`.
 
 
 # Configuration Files
