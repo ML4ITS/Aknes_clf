@@ -17,7 +17,7 @@ Note:
 * `configs/finetune.yaml` is set to run training a model (ResNet34) from scratch on 80% of the dataset.
 * `original_implementation/config.yaml` is set to run training a model (ResNet34) from scratch on 80% of the dataset following the implementation of the relevant previous study [1].
 * All configuration files can be edited to suit your experimental purpose.
-* The dataset is automatically downloaded once you run any of the above codes. The downloading code is defined in `utils/dataset.py`. Or, it can be found [here](https://figshare.com/articles/dataset/Seismic_Signal_Dataset_from_the_knes_Rockslope/21340101).
+* The dataset is automatically downloaded once you run any of the above codes. The downloading code is defined in `utils/dataset.py`. Or, it can be found on [https://doi.org/10.6084/m9.figshare.21340101.v1](https://doi.org/10.6084/m9.figshare.21340101.v1).
 
 
 # Configuration Files
